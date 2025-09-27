@@ -2,12 +2,10 @@ name: Telegram Notifications for Repository Events
 
 # تحديد الأحداث التي ستؤدي إلى تشغيل هذا Workflow
 on:
-  # 1. عند الدفع (Push) إلى أي فرع
   push:
     branches:
       - '**' # يُشغّل على جميع الفروع
 
-  # 2. عند حدث طلب السحب (Pull Request)
   pull_request:
     types: [opened, reopened, closed] # يُشغّل عند الفتح، إعادة الفتح، أو الإغلاق
 
@@ -26,7 +24,6 @@ jobs:
           # 1. بناء رسالة Telegram بناءً على نوع الحدث
           # ------------------------------------
           
-          # بناء رسالة أساسية تحتوي على تفاصيل الحدث
           EVENT_TYPE="${{ github.event_name }}"
           ACTOR="${{ github.actor }}"
           REPO="${{ github.repository }}"
@@ -35,14 +32,10 @@ jobs:
           if [ "$EVENT_TYPE" = "push" ]; then
             # حالة حدث الـ Push (الدفع)
             BRANCH="${{ github.ref_name }}"
-            # الحصول على آخر رسالة commit
-            # نحتاج إلى استخدام git fetch ثم git log للحصول على رسالة الـ commit الصحيحة
-            # لكن لتبسيط العملية وتجنب checkout، سنكتفي بالمعلومات المتاحة من متغيرات GitHub
             MESSAGE="*✅ تحديث جديد (Push) على المستودع*\n"
             MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
             MESSAGE+="📚 المستودع: \${REPO}\\n"
             MESSAGE+="🔗 الفرع: \${BRANCH}\\n"
-            # يمكن إضافة المزيد من تفاصيل الـ Commit هنا
             
           elif [ "$EVENT_TYPE" = "pull_request" ]; then
             # حالة حدث الـ Pull Request (طلب السحب)
@@ -65,21 +58,26 @@ jobs:
             MESSAGE+="🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
             
           else
-            # رسالة افتراضية لأي حدث آخر قد يُضاف مستقبلاً
+            # رسالة افتراضية لأي حدث آخر
             MESSAGE="*🔔 حدث جديد على المستودع*\n"
             MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
             MESSAGE+="📚 المستودع: \${REPO}\\n"
             MESSAGE+="⚙️ نوع الحدث: \${EVENT_TYPE}\"
           fi
           
+          # ------------------------------------------------------------------
+          # التصحيح الحاسم: إضافة fi لإغلاق جملة الـ if الرئيسية 
+          # ------------------------------------------------------------------
+          fi 
+          
           # ------------------------------------
-          # 2. إرسال الرسالة عبر Telegram API
+          # 2. إرسال الرسالة عبر Telegram API (باستخدام الـ Secrets الآمنة)
           # ------------------------------------
           
-          # يجب ترميز الرسالة (URL Encode) قبل إرسالها لتجنب مشاكل الأحرف الخاصة
+          # ترميز الرسالة (URL Encode)
           MESSAGE_ENCODED=$(echo "$MESSAGE" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
           
-          # تنفيذ أمر الـ curl للإرسال
+          # تنفيذ أمر الإرسال
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d "text=${MESSAGE_ENCODED}" \
