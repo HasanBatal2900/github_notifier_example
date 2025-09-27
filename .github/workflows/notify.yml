@@ -1,6 +1,6 @@
 name: Telegram Notifications for Repository Events
 
-# تحديد الأحداث التي ستؤدي إلى تشغيل هذا Workflow
+# تحديد الأحداث
 on:
   push:
     branches:
@@ -13,69 +13,61 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     
-    # هذا الشرط يمنع إرسال إشعارين لنفس الحدث
+    # شرط عدم الإرسال عند دمج طلبات السحب
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
 
     steps:
       - name: Send Telegram Notification
+        # بداية طريقة HEREDOC باستخدام EOF
         run: |
-          # ------------------------------------
-          # 1. بناء رسالة Telegram بناءً على نوع الحدث
-          # (تم استخدام طريقة الدمج MESSAGE="${MESSAGE}..." الأكثر موثوقية)
-          # ------------------------------------
-          
           EVENT_TYPE="${{ github.event_name }}"
           ACTOR="${{ github.actor }}"
           REPO="${{ github.repository }}"
           MESSAGE=""
           
-          if [ "$EVENT_TYPE" = "push" ]; then
-            # حالة حدث الـ Push (الدفع)
+          # بناء الرسالة
+          if [ "$EVENT_TYPE" == "push" ]; then
             BRANCH="${{ github.ref_name }}"
-            MESSAGE="*✅ تحديث جديد (Push) على المستودع*\n"
-            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
-            MESSAGE="${MESSAGE}🔗 الفرع: \${BRANCH}\\n"
+            MESSAGE="*✅ تحديث جديد (Push) على المستودع*
+            👤 بواسطة: \${ACTOR}\
+            📚 المستودع: \${REPO}\
+            🔗 الفرع: \${BRANCH}\"
             
-          elif [ "$EVENT_TYPE" = "pull_request" ]; then
-            # حالة حدث الـ Pull Request (طلب السحب)
+          elif [ "$EVENT_TYPE" == "pull_request" ]; then
             PR_ACTION="${{ github.event.action }}"
             PR_TITLE="${{ github.event.pull_request.title }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
             PR_URL="${{ github.event.pull_request.html_url }}"
             
-            if [ "$PR_ACTION" = "opened" ]; then
-              MESSAGE="*🚀 طلب سحب جديد (Pull Request) تم فتحه*\n"
-            elif [ "$PR_ACTION" = "reopened" ]; then
-              MESSAGE="*🔄 طلب سحب تم إعادة فتحه*\n"
-            elif [ "$PR_ACTION" = "closed" ]; then
-              MESSAGE="*❌ طلب سحب تم إغلاقه*\n"
+            if [ "$PR_ACTION" == "opened" ]; then
+              STATUS="🚀 طلب سحب جديد (Pull Request) تم فتحه"
+            elif [ "$PR_ACTION" == "reopened" ]; then
+              STATUS="🔄 طلب سحب تم إعادة فتحه"
+            elif [ "$PR_ACTION" == "closed" ]; then
+              STATUS="❌ طلب سحب تم إغلاقه"
             fi
             
-            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
-            MESSAGE="${MESSAGE}📝 العنوان: ${PR_TITLE}\n"
-            MESSAGE="${MESSAGE}🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
+            MESSAGE="*${STATUS}*
+            👤 بواسطة: \${ACTOR}\
+            📚 المستودع: \${REPO}\
+            📝 العنوان: ${PR_TITLE}
+            🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
             
           else
-            # رسالة افتراضية لأي حدث آخر
-            MESSAGE="*🔔 حدث جديد على المستودع*\n"
-            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
-            MESSAGE="${MESSAGE}⚙️ نوع الحدث: \${EVENT_TYPE}\"
+            # رسالة افتراضية
+            MESSAGE="*🔔 حدث جديد على المستودع*
+            👤 بواسطة: \${ACTOR}\
+            📚 المستودع: \${REPO}\
+            ⚙️ نوع الحدث: \${EVENT_TYPE}\"
           fi
           
-          # إغلاق جملة الـ if الشرطية الرئيسية 
-          fi 
-          
-          # ------------------------------------
-          # 2. إرسال الرسالة عبر Telegram API (باستخدام الـ Secrets الآمنة)
-          # ------------------------------------
-          
           # ترميز الرسالة (URL Encode)
-          MESSAGE_ENCODED=$(echo "$MESSAGE" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
+          MESSAGE_ENCODED=$(echo -e "${MESSAGE}" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
           
-          # تنفيذ أمر الإرسال
+          # ------------------------------------
+          # إرسال الرسالة عبر Telegram API (باستخدام الـ Secrets الآمنة)
+          # ------------------------------------
+          
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d "text=${MESSAGE_ENCODED}" \
