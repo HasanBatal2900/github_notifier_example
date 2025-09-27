@@ -1,0 +1,86 @@
+name: Telegram Notifications for Repository Events
+
+# تحديد الأحداث التي ستؤدي إلى تشغيل هذا Workflow
+on:
+  # 1. عند الدفع (Push) إلى أي فرع
+  push:
+    branches:
+      - '**' # يُشغّل على جميع الفروع
+
+  # 2. عند حدث طلب السحب (Pull Request)
+  pull_request:
+    types: [opened, reopened, closed] # يُشغّل عند الفتح، إعادة الفتح، أو الإغلاق
+
+jobs:
+  notify:
+    # تشغيل المهمة على أحدث إصدار من نظام Ubuntu
+    runs-on: ubuntu-latest
+    
+    # تحديد الشروط: عدم إرسال إشعارات عن الـ Pull Requests المُغلقة والمدمجة (Merged)
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
+
+    steps:
+      - name: Send Telegram Notification
+        run: |
+          # ------------------------------------
+          # 1. بناء رسالة Telegram بناءً على نوع الحدث
+          # ------------------------------------
+          
+          # بناء رسالة أساسية تحتوي على تفاصيل الحدث
+          EVENT_TYPE="${{ github.event_name }}"
+          ACTOR="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+          MESSAGE=""
+          
+          if [ "$EVENT_TYPE" = "push" ]; then
+            # حالة حدث الـ Push (الدفع)
+            BRANCH="${{ github.ref_name }}"
+            # الحصول على آخر رسالة commit
+            # نحتاج إلى استخدام git fetch ثم git log للحصول على رسالة الـ commit الصحيحة
+            # لكن لتبسيط العملية وتجنب checkout، سنكتفي بالمعلومات المتاحة من متغيرات GitHub
+            MESSAGE="*✅ تحديث جديد (Push) على المستودع*\n"
+            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE+="📚 المستودع: \${REPO}\\n"
+            MESSAGE+="🔗 الفرع: \${BRANCH}\\n"
+            # يمكن إضافة المزيد من تفاصيل الـ Commit هنا
+            
+          elif [ "$EVENT_TYPE" = "pull_request" ]; then
+            # حالة حدث الـ Pull Request (طلب السحب)
+            PR_ACTION="${{ github.event.action }}"
+            PR_TITLE="${{ github.event.pull_request.title }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_URL="${{ github.event.pull_request.html_url }}"
+            
+            if [ "$PR_ACTION" = "opened" ]; then
+              MESSAGE="*🚀 طلب سحب جديد (Pull Request) تم فتحه*\n"
+            elif [ "$PR_ACTION" = "reopened" ]; then
+              MESSAGE="*🔄 طلب سحب تم إعادة فتحه*\n"
+            elif [ "$PR_ACTION" = "closed" ]; then
+              MESSAGE="*❌ طلب سحب تم إغلاقه*\n"
+            fi
+            
+            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE+="📚 المستودع: \${REPO}\\n"
+            MESSAGE+="📝 العنوان: ${PR_TITLE}\n"
+            MESSAGE+="🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
+            
+          else
+            # رسالة افتراضية لأي حدث آخر قد يُضاف مستقبلاً
+            MESSAGE="*🔔 حدث جديد على المستودع*\n"
+            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE+="📚 المستودع: \${REPO}\\n"
+            MESSAGE+="⚙️ نوع الحدث: \${EVENT_TYPE}\"
+          fi
+          
+          # ------------------------------------
+          # 2. إرسال الرسالة عبر Telegram API
+          # ------------------------------------
+          
+          # يجب ترميز الرسالة (URL Encode) قبل إرسالها لتجنب مشاكل الأحرف الخاصة
+          MESSAGE_ENCODED=$(echo "$MESSAGE" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
+          
+          # تنفيذ أمر الـ curl للإرسال
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "text=${MESSAGE_ENCODED}" \
+          -d "parse_mode=Markdown"
