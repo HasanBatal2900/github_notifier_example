@@ -1,6 +1,6 @@
 name: Telegram Notifications for Repository Events
 
-# تحديد الأحداث
+# تحديد الأحداث التي ستؤدي إلى تشغيل هذا Workflow
 on:
   push:
     branches:
@@ -13,15 +13,77 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     
-    # شرط عدم الإرسال عند دمج طلبات السحب
+    # شرط عدم إرسال إشعار الـ PR عندما يتم دمجه (لأن الـ Push سيُرسل إشعارًا)
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
 
     steps:
       - name: Send Telegram Notification
-        # بداية طريقة HEREDOC باستخدام EOF
         run: |
-         MESSAGE_TEXT="تم الاختبار بنجاح من GitHub Actions! التوقيت: $(date)"
+          # ------------------------------------
+          # 1. بناء رسالة Telegram (تم استخدام طريقة الدمج الآمنة في Bash)
+          # ------------------------------------
           
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d "text=${MESSAGE_TEXT}"
+          EVENT_TYPE="${{ github.event_name }}"
+          ACTOR="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+          MESSAGE=""
+          
+          # مسار المستودع على GitHub
+          REPO_URL="https://github.com/${REPO}"
+
+          if [ "$EVENT_TYPE" == "push" ]; then
+            # =============================================================
+            # حالة حدث الـ PUSH (الدفع) - شرح كافي
+            # =============================================================
+            
+            BRANCH="${{ github.ref_name }}"
+            COMMIT_SHA_SHORT="${{ github.sha }}" # أول 7 أحرف من الـ Commit ID
+            COMMIT_URL="${REPO_URL}/commit/${{ github.sha }}"
+            
+            # الحصول على رسالة الـ Commit (ملاحظة: هذا متغير افتراضي لا يعطي تفاصيل Commit متعددة، لكنه الأساس)
+            COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+            
+            MESSAGE="*✅ تحديث كود جديد (PUSH) على المستودع*\n"
+            MESSAGE="${MESSAGE}👤 *المرسل*: \${ACTOR}\\n"
+            MESSAGE="${MESSAGE}📚 *المستودع*: [\${REPO}\](${REPO_URL})\n"
+            MESSAGE="${MESSAGE}🔗 *الفرع*: \${BRANCH}\\n"
+            MESSAGE="${MESSAGE}🆔 *آخر Commit*: [\${COMMIT_SHA_SHORT:0:7}\](${COMMIT_URL})\n"
+            MESSAGE="${MESSAGE}📝 *رسالة Commit*: \${COMMIT_MESSAGE}\"
+            
+          elif [ "$EVENT_TYPE" == "pull_request" ]; then
+            # =============================================================
+            # حالة حدث الـ PULL REQUEST - شرح كافي
+            # =============================================================
+            
+            PR_ACTION="${{ github.event.action }}"
+            PR_TITLE="${{ github.event.pull_request.title }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_URL="${{ github.event.pull_request.html_url }}"
+            PR_SOURCE="${{ github.event.pull_request.head.ref }}"
+            PR_TARGET="${{ github.event.pull_request.base.ref }}"
+            
+            if [ "$PR_ACTION" == "opened" ]; then
+              STATUS="🚀 طلب سحب جديد (OPENED)"
+            elif [ "$PR_ACTION" == "reopened" ]; then
+              STATUS="🔄 طلب سحب تم إعادة فتحه (REOPENED)"
+            elif [ "$PR_ACTION" == "closed" ]; then
+              # تحديد هل تم الدمج أو الإغلاق فقط
+              if ${{ github.event.pull_request.merged }}; then
+                  STATUS="💥 طلب سحب تم *دمجه* (MERGED)"
+              else
+                  STATUS="❌ طلب سحب تم إغلاقه (CLOSED)"
+              fi
+            fi
+            
+            MESSAGE="*${STATUS}*\n"
+            MESSAGE="${MESSAGE}👤 *بواسطة*: \${ACTOR}\\n"
+            MESSAGE="${MESSAGE}📚 *المستودع*: [\${REPO}\](${REPO_URL})\n"
+            MESSAGE="${MESSAGE}#️⃣ *الرقم*: #${PR_NUMBER}\n"
+            MESSAGE="${MESSAGE}📝 *العنوان*: ${PR_TITLE}\n"
+            MESSAGE="${MESSAGE}➡️ *من*: \${PR_SOURCE}\ إلى \${PR_TARGET}\\n"
+            MESSAGE="${MESSAGE}🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
+            
+          else
+            # رسالة افتراضية
+            MESSAGE="*🔔 حدث جديد على المستودع*\n"
+            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
