@@ -4,17 +4,16 @@ name: Telegram Notifications for Repository Events
 on:
   push:
     branches:
-      - '**' # يُشغّل على جميع الفروع
+      - '**' 
 
   pull_request:
-    types: [opened, reopened, closed] # يُشغّل عند الفتح، إعادة الفتح، أو الإغلاق
+    types: [opened, reopened, closed]
 
 jobs:
   notify:
-    # تشغيل المهمة على أحدث إصدار من نظام Ubuntu
     runs-on: ubuntu-latest
     
-    # تحديد الشروط: عدم إرسال إشعارات عن الـ Pull Requests المُغلقة والمدمجة (Merged)
+    # تحديد الشروط: عدم إرسال إشعارات عن الـ Pull Requests المُغلقة والمدمجة
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
 
     steps:
@@ -22,6 +21,7 @@ jobs:
         run: |
           # ------------------------------------
           # 1. بناء رسالة Telegram بناءً على نوع الحدث
+          # (تم إزالة علامات الاقتباس الإضافية لتجنب خطأ EOF)
           # ------------------------------------
           
           EVENT_TYPE="${{ github.event_name }}"
@@ -65,9 +65,7 @@ jobs:
             MESSAGE+="⚙️ نوع الحدث: \${EVENT_TYPE}\"
           fi
           
-          # ------------------------------------------------------------------
-          # التصحيح الحاسم: إضافة fi لإغلاق جملة الـ if الرئيسية 
-          # ------------------------------------------------------------------
+          # إغلاق جملة الـ if الشرطية الرئيسية 
           fi 
           
           # ------------------------------------
