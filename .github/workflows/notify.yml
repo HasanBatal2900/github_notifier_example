@@ -3,94 +3,75 @@ name: Telegram Notifications for Repository Events
 on:
   push:
     branches:
-      - '**' 
-
+      - '**'
   pull_request:
     types: [opened, reopened, closed]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
-    
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
 
     steps:
       - name: Send Telegram Notification
         run: |
-          # ------------------------------------
-          # 1. بناء رسالة Telegram (باستخدام صيغة Bash الصارمة)
-          # ------------------------------------
-          
           EVENT_TYPE="${{ github.event_name }}"
           ACTOR="${{ github.actor }}"
           REPO="${{ github.repository }}"
-          MESSAGE=""
           REPO_URL="https://github.com/${REPO}"
+          MESSAGE=""
 
-          # استخدام مقارنات موثوقة
-          if test "$EVENT_TYPE" = "push"; then
-            # حالة حدث الـ PUSH
+          if [ "$EVENT_TYPE" = "push" ]; then
             BRANCH="${{ github.ref_name }}"
-            COMMIT_SHA_SHORT="${{ github.sha }}"
-            COMMIT_URL="${REPO_URL}/commit/${{ github.sha }}"
+            COMMIT_SHA="${{ github.sha }}"
+            COMMIT_URL="${REPO_URL}/commit/${COMMIT_SHA}"
             COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
-            
+
             MESSAGE="*✅ تحديث كود جديد (PUSH) على المستودع*\n"
-            MESSAGE="${MESSAGE}👤 *المرسل*: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 *المستودع*: [\${REPO}\](${REPO_URL})\n"
-            MESSAGE="${MESSAGE}🔗 *الفرع*: \${BRANCH}\\n"
-            MESSAGE="${MESSAGE}🆔 *آخر Commit*: [\${COMMIT_SHA_SHORT:0:7}\](${COMMIT_URL})\n"
-            MESSAGE="${MESSAGE}📝 *رسالة Commit*: \${COMMIT_MESSAGE}\"
-            
-          elif test "$EVENT_TYPE" = "pull_request"; then
-            # حالة حدث الـ PULL REQUEST
+            MESSAGE="${MESSAGE}👤 *المرسل*: ${ACTOR}\n"
+            MESSAGE="${MESSAGE}📚 *المستودع*: [${REPO}](${REPO_URL})\n"
+            MESSAGE="${MESSAGE}🔗 *الفرع*: ${BRANCH}\n"
+            MESSAGE="${MESSAGE}🆔 *آخر Commit*: [${COMMIT_SHA:0:7}](${COMMIT_URL})\n"
+            MESSAGE="${MESSAGE}📝 *رسالة Commit*: ${COMMIT_MESSAGE}"
+
+          elif [ "$EVENT_TYPE" = "pull_request" ]; then
             PR_ACTION="${{ github.event.action }}"
             PR_TITLE="${{ github.event.pull_request.title }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
             PR_URL="${{ github.event.pull_request.html_url }}"
             PR_SOURCE="${{ github.event.pull_request.head.ref }}"
             PR_TARGET="${{ github.event.pull_request.base.ref }}"
-            
-            if test "$PR_ACTION" = "opened"; then
+            MERGED="${{ github.event.pull_request.merged }}"
+
+            if [ "$PR_ACTION" = "opened" ]; then
               STATUS="🚀 طلب سحب جديد (OPENED)"
-            elif test "$PR_ACTION" = "reopened"; then
+            elif [ "$PR_ACTION" = "reopened" ]; then
               STATUS="🔄 طلب سحب تم إعادة فتحه (REOPENED)"
-            elif test "$PR_ACTION" = "closed"; then
-              if ${{ github.event.pull_request.merged }}; then
-                  STATUS="💥 طلب سحب تم *دمجه* (MERGED)"
+            elif [ "$PR_ACTION" = "closed" ]; then
+              if [ "$MERGED" = "true" ]; then
+                STATUS="💥 طلب سحب تم *دمجه* (MERGED)"
               else
-                  STATUS="❌ طلب سحب تم إغلاقه (CLOSED)"
+                STATUS="❌ طلب سحب تم إغلاقه (CLOSED)"
               fi
             fi
-            
+
             MESSAGE="*${STATUS}*\n"
-            MESSAGE="${MESSAGE}👤 *بواسطة*: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 *المستودع*: [\${REPO}\](${REPO_URL})\n"
+            MESSAGE="${MESSAGE}👤 *بواسطة*: ${ACTOR}\n"
+            MESSAGE="${MESSAGE}📚 *المستودع*: [${REPO}](${REPO_URL})\n"
             MESSAGE="${MESSAGE}#️⃣ *الرقم*: #${PR_NUMBER}\n"
             MESSAGE="${MESSAGE}📝 *العنوان*: ${PR_TITLE}\n"
-            MESSAGE="${MESSAGE}➡️ *من*: \${PR_SOURCE}\ إلى \${PR_TARGET}\\n"
+            MESSAGE="${MESSAGE}➡️ *من*: ${PR_SOURCE} إلى ${PR_TARGET}\n"
             MESSAGE="${MESSAGE}🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
-            
+
           else
-            # رسالة افتراضية
             MESSAGE="*🔔 حدث جديد على المستودع*\n"
-            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
-            MESSAGE="${MESSAGE}⚙️ نوع الحدث: \${EVENT_TYPE}\"
+            MESSAGE="${MESSAGE}👤 بواسطة: ${ACTOR}\n"
+            MESSAGE="${MESSAGE}📚 المستودع: ${REPO}\n"
+            MESSAGE="${MESSAGE}⚙️ نوع الحدث: ${EVENT_TYPE}"
           fi
-          
-          # إغلاق جملة الـ if الشرطية الرئيسية 
-          fi 
-          
-          # ------------------------------------
-          # 2. إرسال الرسالة عبر Telegram API (باستخدام الـ Secrets الآمنة)
-          # ------------------------------------
-          
-          # ترميز الرسالة (URL Encode)
-          MESSAGE_ENCODED=$(echo -e "${MESSAGE}" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
-          
-          # تنفيذ أمر الإرسال
+
+          # إرسال الرسالة
+          MESSAGE_ENCODED=$(echo -e "$MESSAGE" | sed 's/ /%20/g' | sed 's/\n/%0A/g')
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d "text=${MESSAGE_ENCODED}" \
-          -d "parse_mode=Markdown"
+               -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+               -d "text=${MESSAGE_ENCODED}" \
+               -d "parse_mode=Markdown"
