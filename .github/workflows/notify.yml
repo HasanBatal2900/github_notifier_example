@@ -13,7 +13,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     
-    # تحديد الشروط: عدم إرسال إشعارات عن الـ Pull Requests المُغلقة والمدمجة
+    # هذا الشرط يمنع إرسال إشعارين لنفس الحدث
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == false
 
     steps:
@@ -21,7 +21,7 @@ jobs:
         run: |
           # ------------------------------------
           # 1. بناء رسالة Telegram بناءً على نوع الحدث
-          # (تم إزالة علامات الاقتباس الإضافية لتجنب خطأ EOF)
+          # (تم استخدام طريقة الدمج MESSAGE="${MESSAGE}..." الأكثر موثوقية)
           # ------------------------------------
           
           EVENT_TYPE="${{ github.event_name }}"
@@ -33,9 +33,9 @@ jobs:
             # حالة حدث الـ Push (الدفع)
             BRANCH="${{ github.ref_name }}"
             MESSAGE="*✅ تحديث جديد (Push) على المستودع*\n"
-            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE+="📚 المستودع: \${REPO}\\n"
-            MESSAGE+="🔗 الفرع: \${BRANCH}\\n"
+            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
+            MESSAGE="${MESSAGE}🔗 الفرع: \${BRANCH}\\n"
             
           elif [ "$EVENT_TYPE" = "pull_request" ]; then
             # حالة حدث الـ Pull Request (طلب السحب)
@@ -52,17 +52,17 @@ jobs:
               MESSAGE="*❌ طلب سحب تم إغلاقه*\n"
             fi
             
-            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE+="📚 المستودع: \${REPO}\\n"
-            MESSAGE+="📝 العنوان: ${PR_TITLE}\n"
-            MESSAGE+="🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
+            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
+            MESSAGE="${MESSAGE}📝 العنوان: ${PR_TITLE}\n"
+            MESSAGE="${MESSAGE}🔗 [عرض Pull Request #${PR_NUMBER}](${PR_URL})"
             
           else
             # رسالة افتراضية لأي حدث آخر
             MESSAGE="*🔔 حدث جديد على المستودع*\n"
-            MESSAGE+="👤 بواسطة: \${ACTOR}\\n"
-            MESSAGE+="📚 المستودع: \${REPO}\\n"
-            MESSAGE+="⚙️ نوع الحدث: \${EVENT_TYPE}\"
+            MESSAGE="${MESSAGE}👤 بواسطة: \${ACTOR}\\n"
+            MESSAGE="${MESSAGE}📚 المستودع: \${REPO}\\n"
+            MESSAGE="${MESSAGE}⚙️ نوع الحدث: \${EVENT_TYPE}\"
           fi
           
           # إغلاق جملة الـ if الشرطية الرئيسية 
